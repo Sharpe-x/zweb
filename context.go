@@ -67,6 +67,17 @@ func (ctx *Context) JSON(code int, obj interface{}) {
 	encoder := json.NewEncoder(ctx.Writer)
 	if err := encoder.Encode(obj); err != nil {
 		http.Error(ctx.Writer, err.Error(), http.StatusInternalServerError)
+		// http.Error(c.Writer, err.Error(), 500)这里不起作用
+		// 前面已经执行了 ctx.Status(code) 也就是调用了 WriteHeader(code)  w.Header().Set()不起作用 ,返回码将不会再更改 所以直接panic
+		// WriteHeader必须在Write之前调用
+
+		// 正确的顺序
+		//  w.Header().Set("xx")
+		//  w.WriteHeader(code)
+		//  w.Write([]byte("hello world\n"))
+
+		// https://www.zhangshengrong.com/p/zD1yDr25Xr/
+		panic("Encode failed")
 	}
 }
 
