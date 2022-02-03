@@ -24,6 +24,7 @@ type Context struct {
 	// request info
 	Path   string
 	Method string
+	Params map[string]string
 
 	// response info
 	StatusCode int
@@ -90,4 +91,9 @@ func (ctx *Context) HTML(code int, html string) {
 	ctx.SetHeader("Content-Type", "text/html")
 	ctx.Status(code)
 	_, _ = ctx.Writer.Write([]byte(html))
+}
+
+func (ctx *Context) Param(key string) string {
+	value, _ := ctx.Params[key]
+	return value
 }
