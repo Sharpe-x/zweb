@@ -1,8 +1,8 @@
 package zweb
 
 import (
-	"log"
 	"net/http"
+	"strings"
 )
 
 // HandlerFunc defines the handler process request used by zweb
@@ -23,8 +23,8 @@ type HandlerFunc func(*Context)
 type RouterGroup struct {
 	prefix      string        // 前缀(prefix)，比如/，或者/api
 	middlewares []HandlerFunc // 支持的中间间
-	parent      *RouterGroup  // 要支持分组嵌套
-	engine      *Engine       // all groups share a Engine instance
+	//parent      *RouterGroup  // 要支持分组嵌套
+	engine *Engine // all groups share a Engine instance
 }
 
 // Group is defined to create a new RouterGroup
@@ -33,7 +33,7 @@ func (rg *RouterGroup) Group(prefix string) *RouterGroup {
 	engine := rg.engine
 	newGroup := &RouterGroup{
 		prefix: rg.prefix + prefix,
-		parent: rg,
+		//parent: rg,
 		engine: engine,
 	}
 	engine.groups = append(engine.groups, newGroup)
@@ -44,7 +44,7 @@ func (rg *RouterGroup) Group(prefix string) *RouterGroup {
 //。这样实现，我们既可以通过Engine添加路由，也可以通过分组添加路由。
 func (rg *RouterGroup) addRoute(method, comp string, handler HandlerFunc) {
 	pattern := rg.prefix + comp
-	log.Printf("Route %4s - %s", method, pattern)
+	//log.Printf("Route %4s - %s", method, pattern)
 	rg.engine.router.addRoute(method, pattern, handler)
 }
 
@@ -99,7 +99,20 @@ func (e *Engine) Run(addr string) error {
 	return http.ListenAndServe(addr, e)
 }
 
+func (rg *RouterGroup) Use(middleware ...HandlerFunc) {
+	rg.middlewares = append(rg.middlewares, middleware...)
+}
+
 func (e *Engine) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+
+	var middlewares []HandlerFunc
+	for _, group := range e.groups {
+		if strings.HasPrefix(request.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
+
 	c := newContext(writer, request)
+	c.handlers = middlewares
 	e.router.handle(c)
 }

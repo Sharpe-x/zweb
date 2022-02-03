@@ -1,6 +1,7 @@
 package zweb
 
 import (
+	"log"
 	"net/http"
 	"strings"
 )
@@ -37,6 +38,7 @@ func parsePattern(pattern string) []string {
 }
 
 func (r *router) addRoute(method, pattern string, handler HandlerFunc) {
+	log.Printf("Route %4s - %s", method, pattern)
 
 	parts := parsePattern(pattern)
 	key := method + "-" + pattern
@@ -84,9 +86,24 @@ func (r *router) handle(c *Context) {
 	if n != nil {
 		c.Params = params
 		key := c.Method + "-" + n.pattern
-		r.handlers[key](c)
-	} else {
-		c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
-	}
+		c.handlers = append(c.handlers, r.handlers[key]) // 将从路由匹配得到的 Handler 添加到 c.handlers列表中
+		// 中间件A B
+		/*func A(c *Context) {
+			part1
+			c.Next()
+			part2
+		}
+		func B(c *Context) {
+			part3
+			c.Next()
+			part4
+		}*/
+		// 最终执行顺序 part1 -> part3 -> r.handlers[key] -> part 4 -> part2
 
+	} else {
+		c.handlers = append(c.handlers, func(context *Context) {
+			c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
+		})
+	}
+	c.Next()
 }

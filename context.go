@@ -28,6 +28,10 @@ type Context struct {
 
 	// response info
 	StatusCode int
+
+	//middlewares
+	handlers []HandlerFunc
+	index    int // index是记录当前执行到第几个中间件
 }
 
 func newContext(w http.ResponseWriter, r *http.Request) *Context {
@@ -36,7 +40,21 @@ func newContext(w http.ResponseWriter, r *http.Request) *Context {
 		Req:    r,
 		Path:   r.URL.Path,
 		Method: r.Method,
+		index:  -1,
 	}
+}
+
+func (ctx *Context) Next() {
+	ctx.index++
+	s := len(ctx.handlers)
+	for ; ctx.index < s; ctx.index++ {
+		ctx.handlers[ctx.index](ctx)
+	}
+}
+
+func (ctx *Context) Fail(code int, err string) {
+	ctx.index = len(ctx.handlers)
+	ctx.JSON(code, H{"message": err})
 }
 
 func (ctx *Context) PostForm(key string) string {
