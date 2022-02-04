@@ -32,6 +32,8 @@ type Context struct {
 	//middlewares
 	handlers []HandlerFunc
 	index    int // index是记录当前执行到第几个中间件
+
+	engine *Engine
 }
 
 func newContext(w http.ResponseWriter, r *http.Request) *Context {
@@ -44,6 +46,9 @@ func newContext(w http.ResponseWriter, r *http.Request) *Context {
 	}
 }
 
+//Next 不是所有的handler都会调用 Next()。
+//手工调用 Next()，一般用于在请求前后各实现一些行为。
+//如果中间件只作用于请求前，可以省略调用Next()
 func (ctx *Context) Next() {
 	ctx.index++
 	s := len(ctx.handlers)
@@ -108,7 +113,17 @@ func (ctx *Context) Data(code int, data []byte) {
 func (ctx *Context) HTML(code int, html string) {
 	ctx.SetHeader("Content-Type", "text/html")
 	ctx.Status(code)
+
 	_, _ = ctx.Writer.Write([]byte(html))
+}
+
+func (ctx *Context) HTMLRender(code int, name string, data interface{}) {
+	ctx.SetHeader("Content-Type", "text/html")
+	ctx.Status(code)
+
+	if err := ctx.engine.htmlTemplates.ExecuteTemplate(ctx.Writer, name, data); err != nil {
+		ctx.Fail(http.StatusInternalServerError, err.Error())
+	}
 }
 
 func (ctx *Context) Param(key string) string {

@@ -1,7 +1,9 @@
 package zweb
 
 import (
+	"html/template"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -63,8 +65,10 @@ type Engine struct {
 	// 进一步地抽象，将Engine作为最顶层的分组，也就是说Engine拥有RouterGroup所有的能力。
 	*RouterGroup
 	//router map[string]HandlerFunc
-	router *router
-	groups []*RouterGroup //tore all groups
+	router        *router
+	groups        []*RouterGroup     //store all groups
+	htmlTemplates *template.Template // HTML 模板渲染 将所有的模板加载进内存
+	funcMap       template.FuncMap   // HTML 模板渲染 定义模板渲染函数
 }
 
 // New is the constructor of zweb.Engine
@@ -114,5 +118,36 @@ func (e *Engine) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	c := newContext(writer, request)
 	c.handlers = middlewares
+	c.engine = e
 	e.router.handle(c)
+}
+
+func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
+	e.funcMap = funcMap
+}
+
+func (e *Engine) LoadHTMLGlob(pattern string) {
+	e.htmlTemplates = template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
+}
+
+// 服务端渲染
+func (rg *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(rg.prefix, relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(ctx *Context) {
+		file := ctx.Param("filepath")
+		// 		// Check if file exists and/or if we have permission to access it
+		if _, err := fs.Open(file); err != nil {
+			ctx.Status(http.StatusNotFound)
+			return
+		}
+
+		fileServer.ServeHTTP(ctx.Writer, ctx.Req)
+	}
+}
+
+func (rg *RouterGroup) Static(relativePath, root string) {
+	handler := rg.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	rg.GET(urlPattern, handler)
 }
